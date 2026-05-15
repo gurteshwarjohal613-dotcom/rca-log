@@ -450,6 +450,7 @@ export default function RCALog() {
   }, []);
 
   // Load data when session exists
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!session) return;
     loadData();
