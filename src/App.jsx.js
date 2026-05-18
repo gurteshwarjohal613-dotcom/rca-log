@@ -601,7 +601,9 @@ export default function RCALog() {
   const loadData = useCallback(async () => {
     if (!session) return;
     setLoading(true);
-    const userId = session.user?.id;
+    const userId = session.user?.id || session.user_id || (session.user && session.user.sub);
+    console.log('Session user ID:', userId, 'Session:', JSON.stringify(session).slice(0,200));
+    if (!userId) { setDays([defaultDay()]); setLoading(false); return; }
     const db = await supabase.from("trades");
     const { data, error } = await db.select(`user_id=eq.${userId}&order=updated_at.desc`);
     if (!error && data && data.length > 0) {
@@ -621,7 +623,8 @@ export default function RCALog() {
   const saveData = useCallback(async (daysToSave, patternsToSave) => {
     if (!session) return;
     setSaveStatus("saving");
-    const userId = session.user?.id;
+    const userId = session.user?.id || session.user_id || (session.user && session.user.sub);
+    if (!userId) { setSaveStatus("error"); return; }
     const db = await supabase.from("trades");
     await db.delete(`user_id=eq.${userId}`);
     const rows = daysToSave.map((day) => ({ id: day.id, user_id: userId, data: day, updated_at: new Date().toISOString() }));
