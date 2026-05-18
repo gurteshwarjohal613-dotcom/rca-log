@@ -74,16 +74,17 @@ const INSTRUMENTS = ["NQ", "ES", "CL", "GC", "Other"];
 const DIRECTIONS = ["Long", "Short"];
 const LOCATIONS = ["LVN", "VAH", "VAL", "POC", "IB High", "IB Low", "VWAP Band", "HVN", "Other"];
 const DISTRIBUTIONS = ["Normal", "P-Shape", "B-Shape", "Double Distribution", "Trending/Elongated", "Unclear"];
-const PHASES = ["Balance", "Imbalance", "Unclear"];
-const SETUP_TYPES = ["Absorption", "Rejection", "Aggression", "Continuation"];
-const TRADE_TYPES = ["Fade", "Breakout", "Continuation", "Retest"];
+const PHASES = ["Balance", "Imbalance"];
+const DAY_TYPES = ["Balanced", "Trend", "Neutral", "Double Distribution", "Short Covering", "Long Liquidation"];
+const SETUP_IDS = ["FAR", "LRR", "LAB", "VRC", "VDM", "ILR", "ITC"];
 const EXIT_TYPES = ["SL Hit", "BE Exit", "TP Hit", "Manual Exit"];
 const TP_TYPES = ["OCO Default (1:2)", "Discretionary Adjusted", "Trailing Stop"];
 const BE_REASONS = ["Fear", "Legitimate Read", "Premature", "Noise / No Reason"];
-const ERROR_CLASSES = ["Valid Loss", "Model Error", "Execution Error", "Read Error", "Regime Misread", "Confirmation Stacking"];
-const EXEC_QUALITY = ["Clean", "Late", "Early", "Sized Wrong", "Hesitated", "Confirmation Stacked"];
+const ERROR_CLASSES = ["Valid Loss", "Model Error", "Execution Error", "Read Error", "Environment Mismatch", "Confirmation Addiction"];
+const EXEC_QUALITY = ["Clean", "Late", "Early", "Sized Wrong", "Hesitated"];
+const MENTAL_STATES = ["Calm", "Focused", "Anxious", "Impatient", "Angry", "Overconfident", "Distracted"];
+const READING_QUALITY = ["Sharp", "Neutral", "Biased", "Missed Key Data", "Price-Led"];
 
-// PBD/LAT Entry Criteria — exact 8-point checklist
 const ENTRY_CRITERIA = [
   "Outside First 15 Min",
   "Price at Pre-Marked Location",
@@ -92,28 +93,23 @@ const ENTRY_CRITERIA = [
   "CVD Delta > 10%",
   "Big Trade Present",
   "Absorption Confirmed",
+  "Aggression Confirmed",
   "Direction Aligns with Session Bias",
 ];
 
 const defaultTrade = () => ({
   id: `t_${Date.now()}_${Math.random().toString(36).slice(2)}`,
   time: "", instrument: "NQ", direction: "Long",
-  // Location & Context
-  location: "", distributionPrior: "", distributionCurrent: "", phase: "",
-  // Setup
-  setupType: "", tradeType: "",
-  // Entry
-  entryCriteria: {},
-  // Execution
+  locations: [],
+  distributionPrior: "", distributionCurrent: "", phase: "",
+  setupId: "",
+  entryCriteria: {}, primaryCriterion: "",
   executionQuality: "",
-  // Exit
+  mentalState: "", readingQuality: "", sessionQuality: "",
   exitType: "", tpType: "", beReason: "", plannedRR: "2", actualRR: "",
   exitReason: "",
-  // Error
-  errorClass: "", confirmationStacking: false,
-  // RCA
+  errorClass: "", confirmationAddiction: false,
   correctiveAction: "", correctiveRuleGenerated: "",
-  // Pattern
   patternId: "",
   notes: "",
 });
@@ -121,15 +117,13 @@ const defaultTrade = () => ({
 const defaultDay = () => ({
   id: `d_${Date.now()}_${Math.random().toString(36).slice(2)}`,
   date: new Date().toISOString().split("T")[0],
-  sessionBias: "",
-  sessionNotes: "",
+  sessionBias: "", dayType: "", sessionNotes: "",
   trades: [defaultTrade()],
 });
 
 const defaultPattern = () => ({
   id: `p_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-  name: "New Pattern",
-  description: "",
+  name: "New Pattern", description: "",
 });
 
 // ─── COLORS ───────────────────────────────────────────────────────────────────
@@ -141,17 +135,27 @@ const C = {
   yellow: "#fcd34d", yellowBg: "rgba(113,63,18,0.4)", yellowBorder: "#d97706",
   blue: "#93c5fd", blueBg: "rgba(30,58,138,0.4)", blueBorder: "#2563eb",
   purple: "#c4b5fd", purpleBg: "rgba(109,40,217,0.3)", purpleBorder: "#7c3aed",
+  orange: "#fdba74", orangeBg: "rgba(154,52,18,0.3)", orangeBorder: "#ea580c",
 };
 const font = "'IBM Plex Mono', 'Courier New', monospace";
 
 const chipStyle = (active, color) => {
-  const map = { green: [C.greenBg, C.greenBorder, C.green], red: [C.redBg, C.redBorder, C.red], yellow: [C.yellowBg, C.yellowBorder, C.yellow], blue: [C.blueBg, C.blueBorder, C.blue], purple: [C.purpleBg, C.purpleBorder, C.purple] };
+  const map = {
+    green: [C.greenBg, C.greenBorder, C.green], red: [C.redBg, C.redBorder, C.red],
+    yellow: [C.yellowBg, C.yellowBorder, C.yellow], blue: [C.blueBg, C.blueBorder, C.blue],
+    purple: [C.purpleBg, C.purpleBorder, C.purple], orange: [C.orangeBg, C.orangeBorder, C.orange],
+  };
   const [bg, border, text] = active ? (map[color] || ["#27272a", C.border2, C.text]) : ["#18181b", C.border, C.textMuted];
   return { fontSize: 11, padding: "6px 10px", borderRadius: 4, border: `1px solid ${border}`, background: bg, color: text, cursor: "pointer", fontFamily: font };
 };
 
 const badgeStyle = (color) => {
-  const map = { green: [C.greenBg, C.greenBorder, C.green], red: [C.redBg, C.redBorder, C.red], yellow: [C.yellowBg, C.yellowBorder, C.yellow], blue: [C.blueBg, C.blueBorder, C.blue], gray: ["#27272a", C.border2, C.textMuted], purple: [C.purpleBg, C.purpleBorder, C.purple] };
+  const map = {
+    green: [C.greenBg, C.greenBorder, C.green], red: [C.redBg, C.redBorder, C.red],
+    yellow: [C.yellowBg, C.yellowBorder, C.yellow], blue: [C.blueBg, C.blueBorder, C.blue],
+    gray: ["#27272a", C.border2, C.textMuted], purple: [C.purpleBg, C.purpleBorder, C.purple],
+    orange: [C.orangeBg, C.orangeBorder, C.orange],
+  };
   const [bg, border, text] = map[color] || map.gray;
   return { fontSize: 10, padding: "2px 6px", borderRadius: 4, border: `1px solid ${border}`, background: bg, color: text, fontFamily: font, letterSpacing: "0.05em" };
 };
@@ -161,14 +165,16 @@ const labelStyle = { display: "block", fontSize: 10, color: C.textDim, marginBot
 const sectionLabel = { fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, borderBottom: `1px solid ${C.border}`, paddingBottom: 4 };
 
 const exitColor = (t) => ({ "TP Hit": "green", "SL Hit": "red", "BE Exit": "yellow", "Manual Exit": "gray" }[t] || "gray");
-const errorColor = (c) => ({ "Valid Loss": "green", "Model Error": "red", "Regime Misread": "red", "Execution Error": "yellow", "Read Error": "blue", "Confirmation Stacking": "purple" }[c] || "gray");
+const errorColor = (c) => ({ "Valid Loss": "green", "Model Error": "red", "Environment Mismatch": "red", "Execution Error": "yellow", "Read Error": "blue", "Confirmation Addiction": "purple" }[c] || "gray");
 
-// ─── CHECKBOX ─────────────────────────────────────────────────────────────────
-function Checkbox({ checked, onChange, label }) {
+function Checkbox({ checked, onChange, label, color }) {
+  const activeColor = color === "red" ? C.red : color === "yellow" ? C.yellow : C.green;
+  const activeBorder = color === "red" ? C.redBorder : color === "yellow" ? C.yellowBorder : C.greenBorder;
+  const activeBg = color === "red" ? C.redBg : color === "yellow" ? C.yellowBg : C.greenBg;
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: checked ? C.green : C.textMuted, padding: "4px 0" }}>
-      <div onClick={onChange} style={{ width: 16, height: 16, border: `1px solid ${checked ? C.greenBorder : C.border2}`, borderRadius: 3, background: checked ? C.greenBg : C.bg3, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
-        {checked && <span style={{ color: C.green, fontSize: 10, lineHeight: 1 }}>✓</span>}
+    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: checked ? activeColor : C.textMuted, padding: "4px 0" }}>
+      <div onClick={onChange} style={{ width: 16, height: 16, border: `1px solid ${checked ? activeBorder : C.border2}`, borderRadius: 3, background: checked ? activeBg : C.bg3, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
+        {checked && <span style={{ color: activeColor, fontSize: 10, lineHeight: 1 }}>✓</span>}
       </div>
       {label}
     </label>
@@ -179,28 +185,45 @@ function Checkbox({ checked, onChange, label }) {
 function TradeCard({ trade, onUpdate, onDelete, index, patterns }) {
   const [open, setOpen] = useState(true);
   const update = (f, v) => onUpdate({ ...trade, [f]: v });
+
+  const toggleLocation = (loc) => {
+    const locs = trade.locations || [];
+    const updated = locs.includes(loc) ? locs.filter((l) => l !== loc) : [...locs, loc];
+    update("locations", updated);
+  };
+
   const toggleCriteria = (c) => onUpdate({ ...trade, entryCriteria: { ...trade.entryCriteria, [c]: !trade.entryCriteria[c] } });
+
+  const setPrimary = (c) => {
+    if (!trade.entryCriteria[c]) {
+      onUpdate({ ...trade, entryCriteria: { ...trade.entryCriteria, [c]: true }, primaryCriterion: c });
+    } else {
+      update("primaryCriterion", trade.primaryCriterion === c ? "" : c);
+    }
+  };
+
   const metCount = ENTRY_CRITERIA.filter((c) => trade.entryCriteria[c]).length;
   const allMet = metCount === ENTRY_CRITERIA.length;
+  const adherence = Math.round((metCount / ENTRY_CRITERIA.length) * 100);
+  const locs = trade.locations || [];
 
   return (
-    <div style={{ border: `1px solid ${trade.confirmationStacking ? C.purpleBorder : C.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 12, background: C.bg2 }}>
-      {/* Header */}
+    <div style={{ border: `1px solid ${trade.confirmationAddiction ? C.purpleBorder : C.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 12, background: C.bg2 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: C.bg3, cursor: "pointer", flexWrap: "wrap", gap: 8 }} onClick={() => setOpen(!open)}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ color: C.textDim, fontSize: 11 }}>#{String(index + 1).padStart(2, "0")}</span>
           <span style={{ color: C.text, fontSize: 13 }}>{trade.time || "??:??"}</span>
           <span style={{ color: trade.direction === "Long" ? C.green : C.red, fontSize: 11, fontWeight: "bold" }}>{trade.direction}</span>
           <span style={{ color: C.textMuted, fontSize: 11 }}>{trade.instrument}</span>
-          {trade.location && <span style={badgeStyle("blue")}>{trade.location}</span>}
-          {trade.setupType && <span style={badgeStyle("purple")}>{trade.setupType}</span>}
+          {trade.setupId && <span style={badgeStyle("purple")}>{trade.setupId}</span>}
+          {locs.length > 0 && <span style={badgeStyle("blue")}>{locs.join("+")}</span>}
           {trade.exitType && <span style={badgeStyle(exitColor(trade.exitType))}>{trade.exitType}</span>}
           {trade.actualRR && <span style={badgeStyle(parseFloat(trade.actualRR) > 0 ? "green" : "red")}>{trade.actualRR}R</span>}
           {trade.errorClass && <span style={badgeStyle(errorColor(trade.errorClass))}>{trade.errorClass}</span>}
-          {trade.confirmationStacking && <span style={badgeStyle("purple")}>C.Stack</span>}
+          {trade.confirmationAddiction && <span style={badgeStyle("purple")}>C.Addict</span>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ color: allMet ? C.greenBorder : C.textDim, fontSize: 11 }}>{metCount}/{ENTRY_CRITERIA.length}</span>
+          <span style={{ color: allMet ? C.greenBorder : C.textDim, fontSize: 11 }}>{adherence}%</span>
           <button onClick={(e) => { e.stopPropagation(); onDelete(trade.id); }} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer", fontSize: 12 }}>✕</button>
           <span style={{ color: C.textDim, fontSize: 11 }}>{open ? "▲" : "▼"}</span>
         </div>
@@ -209,7 +232,7 @@ function TradeCard({ trade, onUpdate, onDelete, index, patterns }) {
       {open && (
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
 
-          {/* ── BASIC INFO ── */}
+          {/* BASIC INFO */}
           <div>
             <div style={sectionLabel}>Basic Info</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
@@ -222,6 +245,12 @@ function TradeCard({ trade, onUpdate, onDelete, index, patterns }) {
                 </div>
               </div>
               <div>
+                <label style={labelStyle}>Setup ID</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {SETUP_IDS.map((s) => <button key={s} onClick={() => update("setupId", trade.setupId === s ? "" : s)} style={chipStyle(trade.setupId === s, "purple")}>{s}</button>)}
+                </div>
+              </div>
+              <div>
                 <label style={labelStyle}>Pattern</label>
                 <select value={trade.patternId} onChange={(e) => update("patternId", e.target.value)} style={inputStyle}>
                   <option value="">None</option>
@@ -231,24 +260,16 @@ function TradeCard({ trade, onUpdate, onDelete, index, patterns }) {
             </div>
           </div>
 
-          {/* ── MARKET CONTEXT ── */}
+          {/* MARKET CONTEXT */}
           <div>
             <div style={sectionLabel}>Market Context</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div>
-                <label style={labelStyle}>Phase</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {PHASES.map((p) => <button key={p} onClick={() => update("phase", trade.phase === p ? "" : p)} style={chipStyle(trade.phase === p, p === "Imbalance" ? "yellow" : p === "Balance" ? "blue" : "gray")}>{p}</button>)}
+                <label style={labelStyle}>Phase at Entry</label>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {PHASES.map((p) => <button key={p} onClick={() => update("phase", trade.phase === p ? "" : p)} style={chipStyle(trade.phase === p, p === "Imbalance" ? "yellow" : "blue")}>{p}</button>)}
                 </div>
               </div>
-              <div>
-                <label style={labelStyle}>Entry Location</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {LOCATIONS.map((l) => <button key={l} onClick={() => update("location", trade.location === l ? "" : l)} style={chipStyle(trade.location === l, "blue")}>{l}</button>)}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
               <div>
                 <label style={labelStyle}>Prior Distribution</label>
                 <select value={trade.distributionPrior} onChange={(e) => update("distributionPrior", e.target.value)} style={inputStyle}>
@@ -256,81 +277,109 @@ function TradeCard({ trade, onUpdate, onDelete, index, patterns }) {
                   {DISTRIBUTIONS.map((d) => <option key={d}>{d}</option>)}
                 </select>
               </div>
-              <div>
-                <label style={labelStyle}>Current Distribution</label>
-                <select value={trade.distributionCurrent} onChange={(e) => update("distributionCurrent", e.target.value)} style={inputStyle}>
-                  <option value="">Select...</option>
-                  {DISTRIBUTIONS.map((d) => <option key={d}>{d}</option>)}
-                </select>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Current Distribution</label>
+              <select value={trade.distributionCurrent} onChange={(e) => update("distributionCurrent", e.target.value)} style={inputStyle}>
+                <option value="">Select...</option>
+                {DISTRIBUTIONS.map((d) => <option key={d}>{d}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Entry Location — multi-select (tap to toggle, hold primary)</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {LOCATIONS.map((l) => {
+                  const selected = locs.includes(l);
+                  return (
+                    <button key={l} onClick={() => toggleLocation(l)}
+                      style={{ ...chipStyle(selected, "blue"), position: "relative" }}>
+                      {l}
+                      {selected && locs.length > 1 && <span style={{ marginLeft: 4, color: C.blueBorder, fontSize: 9 }}>{locs.indexOf(l) + 1}</span>}
+                    </button>
+                  );
+                })}
               </div>
+              {locs.length > 0 && <div style={{ fontSize: 10, color: C.blue, marginTop: 4 }}>Selected: {locs.join(" + ")}</div>}
             </div>
           </div>
 
-          {/* ── SETUP ── */}
-          <div>
-            <div style={sectionLabel}>Setup Classification</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Setup Type</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {SETUP_TYPES.map((s) => <button key={s} onClick={() => update("setupType", trade.setupType === s ? "" : s)} style={chipStyle(trade.setupType === s, "purple")}>{s}</button>)}
-                </div>
-              </div>
-              <div>
-                <label style={labelStyle}>Trade Type</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {TRADE_TYPES.map((t) => <button key={t} onClick={() => update("tradeType", trade.tradeType === t ? "" : t)} style={chipStyle(trade.tradeType === t, "blue")}>{t}</button>)}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── ENTRY CRITERIA ── */}
+          {/* ENTRY CRITERIA */}
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ ...sectionLabel, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>Entry Criteria Checklist</div>
-              <span style={{ fontSize: 10, color: allMet ? C.green : C.yellow }}>{metCount}/{ENTRY_CRITERIA.length} {allMet ? "✓ All Met" : "criteria met"}</span>
+              <div style={{ ...sectionLabel, marginBottom: 0, borderBottom: "none", paddingBottom: 0 }}>Entry Criteria — tap to check · tap checked to set as Primary</div>
+              <span style={{ fontSize: 10, color: allMet ? C.green : C.yellow, flexShrink: 0, marginLeft: 8 }}>{adherence}% adherence</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-              {ENTRY_CRITERIA.map((c) => (
-                <Checkbox key={c} checked={!!trade.entryCriteria[c]} onChange={() => toggleCriteria(c)} label={c} />
-              ))}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              {ENTRY_CRITERIA.map((c) => {
+                const checked = !!trade.entryCriteria[c];
+                const isPrimary = trade.primaryCriterion === c;
+                return (
+                  <div key={c} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <Checkbox checked={checked} onChange={() => { if (checked && isPrimary) { onUpdate({ ...trade, entryCriteria: { ...trade.entryCriteria, [c]: false }, primaryCriterion: "" }); } else { toggleCriteria(c); } }} label="" />
+                    <button onClick={() => setPrimary(c)}
+                      style={{ fontSize: 11, background: isPrimary ? C.orangeBg : "transparent", border: isPrimary ? `1px solid ${C.orangeBorder}` : "1px solid transparent", color: isPrimary ? C.orange : checked ? C.green : C.textMuted, borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontFamily: font, textAlign: "left", flex: 1 }}>
+                      {isPrimary ? "★ " : ""}{c}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
+            {trade.primaryCriterion && <div style={{ fontSize: 10, color: C.orange, marginTop: 6 }}>Primary: {trade.primaryCriterion}</div>}
           </div>
 
-          {/* ── EXECUTION ── */}
+          {/* EXECUTION */}
           <div>
             <div style={sectionLabel}>Execution</div>
             <label style={labelStyle}>Execution Quality</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {EXEC_QUALITY.map((q) => <button key={q} onClick={() => update("executionQuality", trade.executionQuality === q ? "" : q)} style={chipStyle(trade.executionQuality === q, q === "Confirmation Stacked" ? "purple" : "blue")}>{q}</button>)}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+              {EXEC_QUALITY.map((q) => <button key={q} onClick={() => update("executionQuality", trade.executionQuality === q ? "" : q)} style={chipStyle(trade.executionQuality === q, "blue")}>{q}</button>)}
             </div>
-            <div style={{ marginTop: 10 }}>
-              <Checkbox checked={!!trade.confirmationStacking} onChange={() => update("confirmationStacking", !trade.confirmationStacking)} label="Confirmation Stacking Flag — waited for too many confirmations before entry" />
+            <Checkbox checked={!!trade.confirmationAddiction} onChange={() => update("confirmationAddiction", !trade.confirmationAddiction)} label="Confirmation Addiction — delayed entry waiting for redundant signals beyond 3-trigger requirement" color="red" />
+          </div>
+
+          {/* MOOD & OBSERVATION */}
+          <div>
+            <div style={sectionLabel}>Mood & Market Observation</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={labelStyle}>Mental State</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {MENTAL_STATES.map((m) => <button key={m} onClick={() => update("mentalState", trade.mentalState === m ? "" : m)} style={chipStyle(trade.mentalState === m, m === "Calm" || m === "Focused" ? "green" : m === "Overconfident" || m === "Angry" ? "red" : "yellow")}>{m}</button>)}
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>Market Reading Quality</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {READING_QUALITY.map((r) => <button key={r} onClick={() => update("readingQuality", trade.readingQuality === r ? "" : r)} style={chipStyle(trade.readingQuality === r, r === "Sharp" ? "green" : r === "Neutral" ? "blue" : "red")}>{r}</button>)}
+                </div>
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>Overall Session Quality</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} onClick={() => update("sessionQuality", trade.sessionQuality === String(n) ? "" : String(n))}
+                    style={{ ...chipStyle(trade.sessionQuality === String(n), trade.sessionQuality === String(n) ? (n >= 4 ? "green" : n === 3 ? "yellow" : "red") : "gray"), width: 40, textAlign: "center" }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* ── EXIT ── */}
+          {/* EXIT */}
           <div>
             <div style={sectionLabel}>Exit</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Planned RR (1:X)</label>
-                <input type="number" value={trade.plannedRR} onChange={(e) => update("plannedRR", e.target.value)} placeholder="2" style={inputStyle} min="0" step="0.5" />
-              </div>
-              <div>
-                <label style={labelStyle}>Actual RR Realized (1:X, negative = loss)</label>
-                <input type="number" value={trade.actualRR} onChange={(e) => update("actualRR", e.target.value)} placeholder="e.g. 2 or -1" style={inputStyle} step="0.1" />
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div><label style={labelStyle}>Planned RR (1:X)</label><input type="number" value={trade.plannedRR} onChange={(e) => update("plannedRR", e.target.value)} placeholder="2" style={inputStyle} min="0" step="0.5" /></div>
+              <div><label style={labelStyle}>Actual RR (negative = loss)</label><input type="number" value={trade.actualRR} onChange={(e) => update("actualRR", e.target.value)} placeholder="e.g. 2 or -1" style={inputStyle} step="0.1" /></div>
             </div>
-            <div style={{ marginTop: 12 }}>
-              <label style={labelStyle}>Exit Type</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {EXIT_TYPES.map((e) => <button key={e} onClick={() => update("exitType", trade.exitType === e ? "" : e)} style={chipStyle(trade.exitType === e, exitColor(e))}>{e}</button>)}
-              </div>
+            <label style={labelStyle}>Exit Type</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {EXIT_TYPES.map((e) => <button key={e} onClick={() => update("exitType", trade.exitType === e ? "" : e)} style={chipStyle(trade.exitType === e, exitColor(e))}>{e}</button>)}
             </div>
             {trade.exitType === "TP Hit" && (
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginBottom: 10 }}>
                 <label style={labelStyle}>TP Method</label>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {TP_TYPES.map((t) => <button key={t} onClick={() => update("tpType", trade.tpType === t ? "" : t)} style={chipStyle(trade.tpType === t, "green")}>{t}</button>)}
@@ -338,20 +387,18 @@ function TradeCard({ trade, onUpdate, onDelete, index, patterns }) {
               </div>
             )}
             {trade.exitType === "BE Exit" && (
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginBottom: 10 }}>
                 <label style={labelStyle}>BE Exit Reason</label>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {BE_REASONS.map((r) => <button key={r} onClick={() => update("beReason", trade.beReason === r ? "" : r)} style={chipStyle(trade.beReason === r, r === "Fear" || r === "Premature" || r === "Noise / No Reason" ? "red" : "green")}>{r}</button>)}
+                  {BE_REASONS.map((r) => <button key={r} onClick={() => update("beReason", trade.beReason === r ? "" : r)} style={chipStyle(trade.beReason === r, r === "Legitimate Read" ? "green" : "red")}>{r}</button>)}
                 </div>
               </div>
             )}
-            <div style={{ marginTop: 12 }}>
-              <label style={labelStyle}>Exit Trigger / What Happened</label>
-              <textarea value={trade.exitReason} onChange={(e) => update("exitReason", e.target.value)} rows={2} placeholder="e.g. Opposite side absorbed at HOD, flow reversed..." style={{ ...inputStyle, resize: "none" }} />
-            </div>
+            <label style={labelStyle}>Exit Trigger / What Happened</label>
+            <textarea value={trade.exitReason} onChange={(e) => update("exitReason", e.target.value)} rows={2} placeholder="e.g. Opposite side absorbed at HOD, flow reversed..." style={{ ...inputStyle, resize: "none" }} />
           </div>
 
-          {/* ── ERROR & RCA ── */}
+          {/* ERROR & RCA */}
           <div>
             <div style={sectionLabel}>Error Classification & RCA</div>
             <label style={labelStyle}>Error Class</label>
@@ -359,18 +406,12 @@ function TradeCard({ trade, onUpdate, onDelete, index, patterns }) {
               {ERROR_CLASSES.map((e) => <button key={e} onClick={() => update("errorClass", trade.errorClass === e ? "" : e)} style={chipStyle(trade.errorClass === e, errorColor(e))}>{e}</button>)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Corrective Action</label>
-                <textarea value={trade.correctiveAction} onChange={(e) => update("correctiveAction", e.target.value)} rows={2} placeholder="Behavioral correction for next session..." style={{ ...inputStyle, resize: "none" }} />
-              </div>
-              <div>
-                <label style={labelStyle}>Corrective Rule Generated</label>
-                <textarea value={trade.correctiveRuleGenerated} onChange={(e) => update("correctiveRuleGenerated", e.target.value)} rows={2} placeholder="e.g. No trades in first 15 min..." style={{ ...inputStyle, resize: "none" }} />
-              </div>
+              <div><label style={labelStyle}>Corrective Action</label><textarea value={trade.correctiveAction} onChange={(e) => update("correctiveAction", e.target.value)} rows={2} placeholder="Behavioral correction for next session..." style={{ ...inputStyle, resize: "none" }} /></div>
+              <div><label style={labelStyle}>Corrective Rule Generated</label><textarea value={trade.correctiveRuleGenerated} onChange={(e) => update("correctiveRuleGenerated", e.target.value)} rows={2} placeholder="e.g. No trades in first 15 min..." style={{ ...inputStyle, resize: "none" }} /></div>
             </div>
           </div>
 
-          {/* ── NOTES ── */}
+          {/* NOTES */}
           <div>
             <label style={labelStyle}>Additional Notes</label>
             <textarea value={trade.notes} onChange={(e) => update("notes", e.target.value)} rows={1} placeholder="Context, observations, chart notes..." style={{ ...inputStyle, resize: "none" }} />
@@ -393,7 +434,6 @@ function DayBlock({ day, onUpdate, onDelete, patterns }) {
 
   return (
     <div style={{ marginBottom: 36 }}>
-      {/* Day Header */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 12, background: C.bg2 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -410,21 +450,25 @@ function DayBlock({ day, onUpdate, onDelete, patterns }) {
             <button onClick={() => onDelete(day.id)} style={{ fontSize: 11, padding: "6px 12px", borderRadius: 4, border: `1px solid ${C.border}`, background: C.bg3, color: C.textDim, cursor: "pointer", fontFamily: font }}>Delete Day</button>
           </div>
         </div>
-        {/* Session Context */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
           <div>
             <label style={labelStyle}>Session Bias</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {PHASES.map((p) => <button key={p} onClick={() => onUpdate({ ...day, sessionBias: day.sessionBias === p ? "" : p })} style={chipStyle(day.sessionBias === p, p === "Imbalance" ? "yellow" : p === "Balance" ? "blue" : "gray")}>{p}</button>)}
+              {PHASES.map((p) => <button key={p} onClick={() => onUpdate({ ...day, sessionBias: day.sessionBias === p ? "" : p })} style={chipStyle(day.sessionBias === p, p === "Imbalance" ? "yellow" : "blue")}>{p}</button>)}
             </div>
           </div>
           <div>
-            <label style={labelStyle}>Session Notes (pre-trade context)</label>
+            <label style={labelStyle}>Day Type</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {DAY_TYPES.map((d) => <button key={d} onClick={() => onUpdate({ ...day, dayType: day.dayType === d ? "" : d })} style={chipStyle(day.dayType === d, d === "Trend" || d === "Short Covering" || d === "Long Liquidation" ? "yellow" : d === "Balanced" ? "blue" : "gray")}>{d}</button>)}
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Session Notes</label>
             <textarea value={day.sessionNotes} onChange={(e) => onUpdate({ ...day, sessionNotes: e.target.value })} rows={2} placeholder="Overnight range, macro bias, key levels..." style={{ ...inputStyle, resize: "none", fontSize: 11 }} />
           </div>
         </div>
       </div>
-
       <div style={{ borderLeft: `2px solid ${C.border}`, paddingLeft: 16 }}>
         {day.trades.length === 0 && <div style={{ color: C.textDim, fontSize: 12, padding: 16, textAlign: "center", border: `1px dashed ${C.border}`, borderRadius: 6 }}>No trades logged. Add one above.</div>}
         {day.trades.map((trade, i) => <TradeCard key={trade.id} trade={trade} index={i} onUpdate={updateTrade} onDelete={deleteTrade} patterns={patterns} />)}
@@ -442,16 +486,10 @@ function PatternSaver({ patterns, onUpdate, allTrades }) {
   const addPattern = () => {
     const p = defaultPattern();
     onUpdate([...patterns, p]);
-    setEditingId(p.id);
-    setNewName(p.name);
-    setNewDesc("");
+    setEditingId(p.id); setNewName(p.name); setNewDesc("");
   };
 
-  const saveEdit = (id) => {
-    onUpdate(patterns.map((p) => p.id === id ? { ...p, name: newName, description: newDesc } : p));
-    setEditingId(null);
-  };
-
+  const saveEdit = (id) => { onUpdate(patterns.map((p) => p.id === id ? { ...p, name: newName, description: newDesc } : p)); setEditingId(null); };
   const deletePattern = (id) => onUpdate(patterns.filter((p) => p.id !== id));
 
   const getStats = (patternId) => {
@@ -467,14 +505,10 @@ function PatternSaver({ patterns, onUpdate, allTrades }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 12, color: C.textMuted }}>Tag trades to patterns when logging. Stats update automatically.</div>
+        <div style={{ fontSize: 12, color: C.textMuted }}>Tag trades to patterns when logging. Stats auto-calculate.</div>
         <button onClick={addPattern} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 4, border: `1px solid ${C.purpleBorder}`, background: C.purpleBg, color: C.purple, cursor: "pointer", fontFamily: font }}>+ New Pattern</button>
       </div>
-
-      {patterns.length === 0 && (
-        <div style={{ color: C.textDim, fontSize: 12, padding: 24, textAlign: "center", border: `1px dashed ${C.border}`, borderRadius: 8 }}>No patterns yet. Create one and tag trades to it.</div>
-      )}
-
+      {patterns.length === 0 && <div style={{ color: C.textDim, fontSize: 12, padding: 24, textAlign: "center", border: `1px dashed ${C.border}`, borderRadius: 8 }}>No patterns yet. Create one and tag trades to it.</div>}
       {patterns.map((p) => {
         const { total, wins, winRate, avgRR } = getStats(p.id);
         const isEditing = editingId === p.id;
@@ -499,13 +533,8 @@ function PatternSaver({ patterns, onUpdate, allTrades }) {
                   </div>
                 </div>
                 {p.description && <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 12 }}>{p.description}</div>}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 10 }}>
-                  {[
-                    { label: "Trades", val: total, color: C.text },
-                    { label: "Wins", val: wins, color: C.green },
-                    { label: "Win Rate", val: winRate !== null ? `${winRate}%` : "—", color: winRate !== null && parseInt(winRate) >= 50 ? C.green : C.red },
-                    { label: "Avg RR", val: avgRR !== null ? `${avgRR}R` : "—", color: avgRR !== null && parseFloat(avgRR) > 0 ? C.green : C.red },
-                  ].map((s) => (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 10 }}>
+                  {[{ label: "Trades", val: total, color: C.text }, { label: "Wins", val: wins, color: C.green }, { label: "Win Rate", val: winRate !== null ? `${winRate}%` : "—", color: winRate !== null && parseInt(winRate) >= 50 ? C.green : C.red }, { label: "Avg RR", val: avgRR !== null ? `${avgRR}R` : "—", color: avgRR !== null && parseFloat(avgRR) > 0 ? C.green : C.red }].map((s) => (
                     <div key={s.label} style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 6, padding: "10px 12px" }}>
                       <div style={{ fontSize: 9, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>{s.label}</div>
                       <div style={{ fontSize: 20, color: s.color, fontWeight: "bold" }}>{s.val}</div>
@@ -521,7 +550,7 @@ function PatternSaver({ patterns, onUpdate, allTrades }) {
   );
 }
 
-// ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
@@ -536,7 +565,7 @@ function AuthScreen({ onAuth }) {
       const { data, error } = await supabase.auth.signUp(email, password);
       if (error) { setError(typeof error === "string" ? error : "Signup failed."); }
       else if (data?.access_token) { onAuth(data); }
-      else { setSuccess("Account created. Check your email to confirm, then sign in."); setMode("signin"); }
+      else { setSuccess("Account created. Sign in now."); setMode("signin"); }
     } else {
       const { data, error } = await supabase.auth.signIn(email, password);
       if (error) { setError(typeof error === "string" ? error : "Invalid credentials."); }
@@ -577,6 +606,37 @@ function AuthScreen({ onAuth }) {
   );
 }
 
+// ─── SUMMARY HELPERS ──────────────────────────────────────────────────────────
+function BreakdownTable({ title, items, allTrades, keyFn, color }) {
+  const rows = items.map((item) => {
+    const trades = allTrades.filter((t) => keyFn(t) === item);
+    const total = trades.length;
+    const wins = trades.filter((t) => t.exitType === "TP Hit").length;
+    const winRate = total > 0 ? ((wins / total) * 100).toFixed(0) : null;
+    const rrVals = trades.filter((t) => t.actualRR !== "" && t.actualRR !== undefined).map((t) => parseFloat(t.actualRR)).filter((v) => !isNaN(v));
+    const avgRR = rrVals.length > 0 ? (rrVals.reduce((a, b) => a + b, 0) / rrVals.length).toFixed(2) : null;
+    return { item, total, wins, winRate, avgRR };
+  }).filter((r) => r.total > 0);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
+      <div style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>{title}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {rows.map((r) => (
+          <div key={r.item} style={{ display: "grid", gridTemplateColumns: "140px 40px 60px 60px", gap: 8, alignItems: "center", fontSize: 11 }}>
+            <span style={{ color: color || C.textMuted, fontSize: 11 }}>{r.item}</span>
+            <span style={{ color: C.textDim }}>{r.total}</span>
+            <span style={{ color: r.winRate !== null && parseInt(r.winRate) >= 50 ? C.green : C.red }}>{r.winRate !== null ? `${r.winRate}%W` : "—"}</span>
+            <span style={{ color: r.avgRR !== null && parseFloat(r.avgRR) > 0 ? C.green : C.red }}>{r.avgRR !== null ? `${r.avgRR}R` : "—"}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function RCALog() {
   const [session, setSession] = useState(null);
@@ -602,16 +662,11 @@ export default function RCALog() {
     if (!session) return;
     setLoading(true);
     const userId = session.user?.id || session.user_id || (session.user && session.user.sub);
-    console.log('Session user ID:', userId, 'Session:', JSON.stringify(session).slice(0,200));
     if (!userId) { setDays([defaultDay()]); setLoading(false); return; }
     const db = await supabase.from("trades");
     const { data, error } = await db.select(`user_id=eq.${userId}&order=updated_at.desc`);
-    if (!error && data && data.length > 0) {
-      setDays(data.map((row) => row.data));
-    } else if (!error && (!data || data.length === 0)) {
-      setDays([defaultDay()]);
-    }
-    // Load patterns
+    if (!error && data && data.length > 0) { setDays(data.map((row) => row.data)); }
+    else if (!error && (!data || data.length === 0)) { setDays([defaultDay()]); }
     const pdb = await supabase.from("trades");
     const { data: pdata } = await pdb.select(`user_id=eq.${userId}_patterns`);
     if (pdata && pdata.length > 0 && pdata[0].data) { setPatterns(pdata[0].data); }
@@ -628,7 +683,6 @@ export default function RCALog() {
     const db = await supabase.from("trades");
     await db.delete(`user_id=eq.${userId}`);
     const rows = daysToSave.map((day) => ({ id: day.id, user_id: userId, data: day, updated_at: new Date().toISOString() }));
-    // Save patterns as a special row
     rows.push({ id: `${userId}_patterns_row`, user_id: `${userId}_patterns`, data: patternsToSave, updated_at: new Date().toISOString() });
     const { error } = await db.upsert(rows);
     setSaveStatus(error ? "error" : "saved");
@@ -655,7 +709,6 @@ export default function RCALog() {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: font }}>
-      {/* Header */}
       <div style={{ borderBottom: `1px solid ${C.border}`, padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: "rgba(9,9,11,0.97)", zIndex: 10, flexWrap: "wrap", gap: 8 }}>
         <div>
           <div style={{ fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", color: C.text }}>PBD/LAT · RCA Log</div>
@@ -687,10 +740,10 @@ export default function RCALog() {
           <PatternSaver patterns={patterns} onUpdate={setPatterns} allTrades={allTrades} />
 
         ) : (
-          /* SUMMARY */
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {/* Top stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+            {/* TOP STATS */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12 }}>
               {[
                 { label: "Total Trades", val: total, color: C.text },
                 { label: "TP Hit", val: byExit("TP Hit"), color: C.green },
@@ -698,28 +751,37 @@ export default function RCALog() {
                 { label: "BE Exit", val: byExit("BE Exit"), color: C.yellow },
                 { label: "Avg RR", val: avgRR !== null ? `${avgRR}R` : "—", color: avgRR !== null && parseFloat(avgRR) > 0 ? C.green : C.red },
                 { label: "Win Rate", val: total > 0 ? `${((byExit("TP Hit") / total) * 100).toFixed(0)}%` : "—", color: C.text },
+                { label: "Avg Adherence", val: allTrades.length > 0 ? `${Math.round(allTrades.reduce((a, t) => a + (ENTRY_CRITERIA.filter((c) => t.entryCriteria && t.entryCriteria[c]).length / ENTRY_CRITERIA.length) * 100, 0) / allTrades.length)}%` : "—", color: C.blue },
               ].map((stat) => (
                 <div key={stat.label} style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 8, padding: 14 }}>
                   <div style={{ fontSize: 9, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>{stat.label}</div>
-                  <div style={{ fontSize: 26, color: stat.color }}>{stat.val}</div>
-                  {total > 0 && stat.label !== "Total Trades" && stat.label !== "Avg RR" && stat.label !== "Win Rate" && (
-                    <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>{((parseInt(stat.val) / total) * 100).toFixed(0)}%</div>
-                  )}
+                  <div style={{ fontSize: 24, color: stat.color }}>{stat.val}</div>
                 </div>
               ))}
             </div>
 
-            {/* Error breakdown */}
+            {/* CONDITIONAL BREAKDOWNS */}
+            <div style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.12em", padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>Conditional Edge Analysis — Win Rate + Avg RR</div>
+            <div style={{ fontSize: 10, color: C.textDim, marginBottom: -8 }}>Columns: Setup · Count · Win% · Avg RR</div>
+
+            <BreakdownTable title="By Setup ID" items={SETUP_IDS} allTrades={allTrades} keyFn={(t) => t.setupId} color={C.purple} />
+            <BreakdownTable title="By Phase at Entry" items={PHASES} allTrades={allTrades} keyFn={(t) => t.phase} color={C.yellow} />
+            <BreakdownTable title="By Entry Location (Single)" items={LOCATIONS} allTrades={allTrades} keyFn={(t) => (t.locations && t.locations.length === 1) ? t.locations[0] : null} color={C.blue} />
+            <BreakdownTable title="By Current Distribution" items={DISTRIBUTIONS} allTrades={allTrades} keyFn={(t) => t.distributionCurrent} color={C.textMuted} />
+            <BreakdownTable title="By Primary Entry Criterion" items={ENTRY_CRITERIA} allTrades={allTrades} keyFn={(t) => t.primaryCriterion} color={C.orange} />
+            <BreakdownTable title="By Day Type" items={DAY_TYPES} allTrades={allTrades} keyFn={(t) => { const day = days.find((d) => d.trades.some((tr) => tr.id === t.id)); return day ? day.dayType : null; }} color={C.textMuted} />
+
+            {/* ERROR BREAKDOWN */}
             <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
               <div style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>Error Classification</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {ERROR_CLASSES.map((cls) => {
                   const count = byError(cls);
                   const pct = total > 0 ? (count / total) * 100 : 0;
-                  const barColor = { "Valid Loss": C.greenBorder, "Model Error": C.redBorder, "Execution Error": C.yellowBorder, "Read Error": C.blueBorder, "Regime Misread": "#7c3aed", "Confirmation Stacking": C.purpleBorder }[cls] || C.textDim;
+                  const barColor = { "Valid Loss": C.greenBorder, "Model Error": C.redBorder, "Execution Error": C.yellowBorder, "Read Error": C.blueBorder, "Environment Mismatch": C.redBorder, "Confirmation Addiction": C.purpleBorder }[cls] || C.textDim;
                   return (
                     <div key={cls} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ fontSize: 11, color: C.textMuted, width: 150, flexShrink: 0 }}>{cls}</div>
+                      <div style={{ fontSize: 11, color: C.textMuted, width: 160, flexShrink: 0 }}>{cls}</div>
                       <div style={{ flex: 1, background: C.border, borderRadius: 4, height: 4 }}><div style={{ width: `${pct}%`, height: 4, borderRadius: 4, background: barColor }} /></div>
                       <div style={{ fontSize: 11, color: C.textMuted, width: 20, textAlign: "right" }}>{count}</div>
                     </div>
@@ -728,45 +790,23 @@ export default function RCALog() {
               </div>
             </div>
 
-            {/* BE Reason breakdown */}
+            {/* BE BREAKDOWN */}
             {byExit("BE Exit") > 0 && (
               <div style={{ background: C.bg2, border: `1px solid ${C.yellowBorder}`, borderRadius: 8, padding: 16 }}>
                 <div style={{ fontSize: 10, color: C.yellow, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>BE Exit Breakdown</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {BE_REASONS.map((r) => {
-                    const count = beWithReason.filter((t) => t.beReason === r).length;
-                    return count > 0 ? (
-                      <div key={r} style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 6, padding: "8px 12px" }}>
-                        <div style={{ fontSize: 10, color: C.textDim, marginBottom: 2 }}>{r}</div>
-                        <div style={{ fontSize: 18, color: r === "Legitimate Read" ? C.green : C.yellow }}>{count}</div>
-                      </div>
-                    ) : null;
-                  })}
+                  {BE_REASONS.map((r) => { const count = beWithReason.filter((t) => t.beReason === r).length; return count > 0 ? (
+                    <div key={r} style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 6, padding: "8px 12px" }}>
+                      <div style={{ fontSize: 10, color: C.textDim, marginBottom: 2 }}>{r}</div>
+                      <div style={{ fontSize: 18, color: r === "Legitimate Read" ? C.green : C.yellow }}>{count}</div>
+                    </div>
+                  ) : null; })}
                   {beWithReason.length === 0 && <div style={{ fontSize: 11, color: C.textDim }}>No BE reasons logged yet.</div>}
                 </div>
               </div>
             )}
 
-            {/* Location breakdown */}
-            <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-              <div style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>Entry Location Breakdown</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {LOCATIONS.map((l) => {
-                  const count = allTrades.filter((t) => t.location === l).length;
-                  const wins = allTrades.filter((t) => t.location === l && t.exitType === "TP Hit").length;
-                  return count > 0 ? (
-                    <div key={l} style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 6, padding: "10px 14px", minWidth: 80 }}>
-                      <div style={{ fontSize: 10, color: C.blue, marginBottom: 4 }}>{l}</div>
-                      <div style={{ fontSize: 18, color: C.text }}>{count}</div>
-                      <div style={{ fontSize: 10, color: C.textDim }}>{count > 0 ? `${((wins / count) * 100).toFixed(0)}% W` : ""}</div>
-                    </div>
-                  ) : null;
-                })}
-                {allTrades.filter((t) => t.location).length === 0 && <div style={{ fontSize: 11, color: C.textDim }}>No location data yet.</div>}
-              </div>
-            </div>
-
-            {/* Corrective rules */}
+            {/* CORRECTIVE RULES */}
             <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
               <div style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>Corrective Rules Generated</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -777,7 +817,7 @@ export default function RCALog() {
               </div>
             </div>
 
-            {/* Recent corrective actions */}
+            {/* CORRECTIVE ACTIONS */}
             <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
               <div style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>Recent Corrective Actions</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -790,6 +830,7 @@ export default function RCALog() {
                 {allTrades.filter((t) => t.correctiveAction).length === 0 && <div style={{ fontSize: 11, color: C.textDim }}>No corrective actions logged yet.</div>}
               </div>
             </div>
+
           </div>
         )}
       </div>
